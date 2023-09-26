@@ -6,7 +6,7 @@ const port = process.env.PORT || 5000;
 
 // middleware
 app.use(cors());
-app.use(express());
+app.use(express.json());
 
 
 const { MongoClient, ServerApiVersion } = require('mongodb');
@@ -29,7 +29,6 @@ async function run() {
         const menuCollection = client.db("FoodDb").collection("menu");
         const reviewCollection = client.db("FoodDb").collection("reviews");
         const cartCollection = client.db("FoodDb").collection("carts");
-        const testCollection = client.db("FoodDb").collection("test");
 
         app.get('/menu', async (req, res) => {
             const result = await menuCollection.find().toArray();
@@ -41,17 +40,20 @@ async function run() {
             res.send(result);
         })
 
-        app.post('/test', async(req, res) =>{
-            const menu = req.body;
-            console.log('menu result', menu);
-            const result = await testCollection.insertOne(menu);
+
+        // Card related working
+        app.get('/carts', async(req, res) =>{
+            const email = req.query.email;
+            if(!email){
+                res.send([]);
+            }
+            const query = {email: email};
+            const result = await cartCollection.find(query).toArray();
             res.send(result);
         })
 
-        // Card related working
-        app.post('/menuCart', async (req, res) => {
+        app.post('/carts', async (req, res) => {
             const item = req.body;
-            console.log("item result", item);
             const result = await cartCollection.insertOne(item);
             res.send(result);
         })
