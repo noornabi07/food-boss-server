@@ -51,6 +51,7 @@ async function run() {
         const menuCollection = client.db("FoodDb").collection("menu");
         const reviewCollection = client.db("FoodDb").collection("reviews");
         const cartCollection = client.db("FoodDb").collection("carts");
+        const paymentCollection = client.db("FoodDb").collection("payments");
 
         // json webtoken
         app.post('/jwt', (req, res) => {
@@ -181,7 +182,6 @@ async function run() {
         app.post('/create-payment-intent', verifyJWT, async(req, res) =>{
             const {price} = req.body;
             const amount = price*100;
-            console.log('response', price, amount);
 
             const paymentIntent = await stripe.paymentIntents.create({
                 amount: amount,
@@ -192,6 +192,18 @@ async function run() {
                 clientSecret: paymentIntent.client_secret
             })
 
+        })
+
+        // payment related api 
+        app.post('/payments', verifyJWT, async(req, res) =>{
+            const payment = req.body;
+            const insertResult = await paymentCollection.insertOne(payment);
+
+            const query = {_id: {$in: payment.cartItems.map(id => new ObjectId(id))}}
+            // console.log(query)
+            const deletedResult = await cartCollection.deleteMany(query)
+
+            res.send({insertResult, deletedResult});
         })
 
 
