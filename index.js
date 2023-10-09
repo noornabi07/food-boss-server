@@ -128,15 +128,15 @@ async function run() {
             res.send(result);
         })
 
-        app.post('/menu', verifyJWT, verifyAdmin, async(req, res) =>{
+        app.post('/menu', verifyJWT, verifyAdmin, async (req, res) => {
             const newItem = req.body;
             const result = await menuCollection.insertOne(newItem);
             res.send(result);
         })
 
-        app.delete('/menu/:id', verifyJWT, verifyAdmin, async(req, res) =>{
+        app.delete('/menu/:id', verifyJWT, verifyAdmin, async (req, res) => {
             const id = req.params.id;
-            const query = {_id: id};
+            const query = { _id: id };
             const result = await menuCollection.deleteOne(query);
             res.send(result);
         })
@@ -179,9 +179,9 @@ async function run() {
 
 
         // PAYMENT CREATE INTENT
-        app.post('/create-payment-intent', verifyJWT, async(req, res) =>{
-            const {price} = req.body;
-            const amount = price*100;
+        app.post('/create-payment-intent', verifyJWT, async (req, res) => {
+            const { price } = req.body;
+            const amount = parseInt(price * 100);
 
             const paymentIntent = await stripe.paymentIntents.create({
                 amount: amount,
@@ -195,15 +195,62 @@ async function run() {
         })
 
         // payment related api 
-        app.post('/payments', verifyJWT, async(req, res) =>{
+        app.post('/payments', verifyJWT, async (req, res) => {
             const payment = req.body;
             const insertResult = await paymentCollection.insertOne(payment);
 
-            const query = {_id: {$in: payment.cartItems.map(id => new ObjectId(id))}}
+            const query = { _id: { $in: payment.cartItems.map(id => new ObjectId(id)) } }
             // console.log(query)
             const deletedResult = await cartCollection.deleteMany(query)
 
-            res.send({insertResult, deletedResult});
+            res.send({ insertResult, deletedResult });
+        })
+
+        app.get('/admin-stats', verifyJWT, verifyAdmin, async (req, res) => {
+            const users = await usersCollection.estimatedDocumentCount();
+            const products = await menuCollection.estimatedDocumentCount();
+            const orders = await paymentCollection.estimatedDocumentCount();
+
+            const payments = await paymentCollection.find().toArray();
+            const revenue = payments.reduce((sum, payment) => sum + payment.price, 0)
+
+            res.send({ users, products, orders, revenue });
+        })
+
+
+        app.get('/order-stats', verifyJWT, verifyAdmin, async (req, res) => {
+            const pipeline = [
+                {
+                    $lookup: {
+                        from: 'menu',
+                        localField: 'menuItems',
+                        foreignField: '_id',
+                        as: 'menuItemsData'
+                    }
+                },
+                {
+                    $unwind: '$menuItemsData'
+                },
+                {
+                    $group: {
+                        _id: '$menuItemsData.category',
+                        count: { $sum: 1 },
+                        total: {$sum: '$menuItemsData.price'}
+                    }
+                },
+                {
+                    $project: {
+                        category: '$_id',
+                        count: 1,
+                        total: { $round: ['$total', 2] },
+                        _id: 0
+
+                    }
+                }
+            ];
+
+            const result = await paymentCollection.aggregate(pipeline).toArray();
+            res.send(result);
         })
 
 
