@@ -1,6 +1,9 @@
 const express = require('express');
 const app = express();
 const jwt = require('jsonwebtoken');
+const nodemailer = require("nodemailer");
+const mg = require('nodemailer-mailgun-transport');
+
 
 const cors = require('cors');
 require('dotenv').config()
@@ -11,6 +14,50 @@ const stripe = require('stripe')(process.env.PAYMENT_SECRET_KEY)
 // middleware
 app.use(cors());
 app.use(express.json());
+
+
+// payment email aler transportal
+
+// let transporter = nodemailer.createTransport({
+//     host: 'smtp.sendgrid.net',
+//     port: 587,
+//     auth: {
+//         user: "apikey",
+//         pass: process.env.SENDGRID_API_KEY
+//     }
+// })
+
+const auth = {
+    auth: {
+      api_key: process.env.EMAIL_PRIVATE_KEY,
+      domain: process.env.EMAIL_DOMAIN
+    }
+  }
+  
+  const transporter = nodemailer.createTransport(mg(auth));
+
+
+// Payment successfully email Alert code
+const paymentEmailAlert = payment => {
+    transporter.sendMail({
+        from: "noornabiprogram07@gmail.com", // verified sender email
+        to: "noornabiprogram07@gmail.com", // recipient email
+        subject: "Your order is confirmed. Now enjoy your food", // Subject line
+        text: "Hello world!", // plain text body
+        html: `
+            <div>
+                <h2>Your Payment Confirmed</h2>
+                <p>TransectionId: ${payment.transectionId}</p>
+            </div>
+        `, // html body
+    }, function (error, info) {
+        if (error) {
+            console.log(error);
+        } else {
+            console.log('Email sent: ' + info.response);
+        }
+    });
+}
 
 
 
@@ -200,8 +247,10 @@ async function run() {
             const insertResult = await paymentCollection.insertOne(payment);
 
             const query = { _id: { $in: payment.cartItems.map(id => new ObjectId(id)) } }
-            // console.log(query)
             const deletedResult = await cartCollection.deleteMany(query)
+
+            // send email notification alert coding
+            paymentEmailAlert(payment)
 
             res.send({ insertResult, deletedResult });
         })
@@ -235,7 +284,7 @@ async function run() {
                     $group: {
                         _id: '$menuItemsData.category',
                         count: { $sum: 1 },
-                        total: {$sum: '$menuItemsData.price'}
+                        total: { $sum: '$menuItemsData.price' }
                     }
                 },
                 {
